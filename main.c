@@ -13,9 +13,17 @@ typedef struct {
     u_int32_t numDPS;
     u_int32_t totalParties;
     sem_t partyReady;
+    sem_t freeInstance;
     u_int8_t minTime;
     u_int8_t maxTime;
+    u_int32_t *partyCount;
+    bool exitFlag;
 } GameState;
+
+typedef struct {
+    GameState *state;
+    int instanceID; // Unique instance ID
+} ThreadData;
 
 int read_config(const char *filename, GameState *state) {
     FILE *file = fopen(filename, "r");
@@ -44,44 +52,60 @@ int read_config(const char *filename, GameState *state) {
 }
 
 void *run_instance(void *arg) {
-    GameState *state = (GameState *)arg;
+    ThreadData *data = (ThreadData *)arg;
+    GameState *state = data->state;
+    int instanceID = data->instanceID;
 
     while (1) {
         sem_wait(&state->partyReady);
 
-        pthread_t tid = pthread_self(); // Get thread ID
+        if (state->exitFlag) break;
+
+        pthread_t tid = pthread_self();
         int clearTime = rand() % (state->maxTime - state->minTime + 1) + state->minTime;
 
-        printf("[Thread %lu] Instance active (clearing in %d seconds)\n", tid, clearTime);
+        printf("[Thread %lu | Instance %d] Instance active (clearing in %d seconds)\n", tid, instanceID, clearTime);
         sleep(clearTime);
-        printf("[Thread %lu] Instance finished\n", tid);
+        printf("[Thread %lu | Instance %d] Instance finished\n", tid, instanceID);
+
+        state->partyCount[instanceID]++;
+
+        sem_post(&state->freeInstance);
     }
 
+    printf("[Thread %lu | Instance %d] Exiting...\n", pthread_self(), instanceID);
     return NULL;
 }
 
 void queue_manager(GameState *state) {
     pthread_t threads[state->numInstances];
+    ThreadData threadData[state->numInstances];
 
-    // Create fixed threads
     for (int i = 0; i < state->numInstances; i++) {
-        pthread_create(&threads[i], NULL, run_instance, state);
+        threadData[i].state = state;
+        threadData[i].instanceID = i;
+        pthread_create(&threads[i], NULL, run_instance, &threadData[i]);
     }
 
     while (state->numTanks >= 1 && state->numHealers >= 1 && state->numDPS >= 3) {
+        sem_wait(&state->freeInstance);
+
         state->numTanks--;
         state->numHealers--;
         state->numDPS -= 3;
         state->totalParties++;
 
-        printf("Party assigned!\n");
-
         sem_post(&state->partyReady);
         sleep(1);
     }
 
+    // 🔹 Signal threads to exit
+    state->exitFlag = true;
     for (int i = 0; i < state->numInstances; i++) {
-        pthread_cancel(threads[i]);
+        sem_post(&state->partyReady);
+    }
+
+    for (int i = 0; i < state->numInstances; i++) {
         pthread_join(threads[i], NULL);
     }
 
@@ -97,16 +121,27 @@ int main() {
 
     state.totalParties = 0;
     sem_init(&state.partyReady, 0, 0);
+    sem_init(&state.freeInstance, 0, state.numInstances);
+
+    state.partyCount = (u_int32_t *)calloc(state.numInstances, sizeof(u_int32_t));
 
     srand(time(NULL));
 
     queue_manager(&state);
 
+    // Print per-instance party count
+    for (int i = 0; i < state.numInstances; i++) {
+        printf("Instance %d handled %d parties.\n", i, state.partyCount[i]);
+    }
+
+    // Cleanup allocated memory
+    free(state.partyCount);
+
     printf("\n=== Summary ===\n");
     printf("Total parties served: %d\n", state.totalParties);
     printf("DPS players remaining: %d\n", state.numDPS);
     printf("Healers remaining: %d\n", state.numHealers);
-    printf("Tank remaining: %d\n", state.numTanks);
+    printf("Tanks remaining: %d\n", state.numTanks);
 
     return 0;
 }

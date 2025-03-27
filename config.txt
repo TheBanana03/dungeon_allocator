@@ -1,6 +1,6 @@
 instances: 3
-tanks: 5
-healers: 4
-dps: 9
+tanks: 190
+healers: 18
+dps: 5876
 min time: 5
 max time: 15
