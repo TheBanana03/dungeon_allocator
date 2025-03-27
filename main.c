@@ -3,6 +3,7 @@
 #include <pthread.h>
 #include <semaphore.h>
 #include <unistd.h>
+#include <string.h>
 #include <stdbool.h>
 
 typedef struct {
