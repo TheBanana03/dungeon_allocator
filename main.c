@@ -45,17 +45,16 @@ int read_config(const char *filename, GameState *state) {
 
 void *run_instance(void *arg) {
     GameState *state = (GameState *)arg;
-    bool status = false;
 
     while (1) {
         sem_wait(&state->partyReady);
 
-        status = true;
+        pthread_t tid = pthread_self(); // Get thread ID
         int clearTime = rand() % (state->maxTime - state->minTime + 1) + state->minTime;
-        printf("Instance active (clearing in %d seconds)\n", clearTime);
+
+        printf("[Thread %lu] Instance active (clearing in %d seconds)\n", tid, clearTime);
         sleep(clearTime);
-        printf("Instance finished\n");
-        status = false;
+        printf("[Thread %lu] Instance finished\n", tid);
     }
 
     return NULL;
