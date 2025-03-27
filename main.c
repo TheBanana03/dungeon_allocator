@@ -20,28 +20,6 @@ int read_config(const char *filename, GameState *state) {
     FILE *file = fopen(filename, "r");
     if (!file) {
         perror("Error opening config file");
-        return 0;  // Return failure
-    }
-
-    if (fscanf(file, "%d %d %d %d %d %d",
-               &state->numInstances,
-               &state->numTanks,
-               &state->numHealers,
-               &state->numDPS,
-               &state->minTime,
-               &state->maxTime) != 6) {
-        fprintf(stderr, "Error reading config file\n");
-        fclose(file);
-        return 0;
-    }
-
-    fclose(file);
-    return 1;
-}
-int read_config(const char *filename, GameState *state) {
-    FILE *file = fopen(filename, "r");
-    if (!file) {
-        perror("Error opening config file");
         return 0;
     }
 
