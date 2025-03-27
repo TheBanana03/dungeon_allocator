@@ -5,6 +5,8 @@
 #include <unistd.h>
 #include <string.h>
 #include <stdbool.h>
+#include <ctype.h>
+#include <stdint.h>
 
 typedef struct {
     u_int32_t numInstances;
@@ -24,32 +26,6 @@ typedef struct {
     GameState *state;
     int instanceID; // Unique instance ID
 } ThreadData;
-
-int read_config(const char *filename, GameState *state) {
-    FILE *file = fopen(filename, "r");
-    if (!file) {
-        perror("Error opening config file");
-        return 0;
-    }
-
-    char line[50];
-    while (fgets(line, 50, file)) {
-        char key[50];
-        int value;
-
-        if (sscanf(line, "%[^:]: %d", key, &value) == 2) {
-            if (strcmp(key, "instances") == 0) state->numInstances = value;
-            else if (strcmp(key, "tanks") == 0) state->numTanks = value;
-            else if (strcmp(key, "healers") == 0) state->numHealers = value;
-            else if (strcmp(key, "dps") == 0) state->numDPS = value;
-            else if (strcmp(key, "min time") == 0) state->minTime = value;
-            else if (strcmp(key, "max time") == 0) state->maxTime = value;
-        }
-    }
-
-    fclose(file);
-    return 1;
-}
 
 void *run_instance(void *arg) {
     ThreadData *data = (ThreadData *)arg;
@@ -99,7 +75,6 @@ void queue_manager(GameState *state) {
         sleep(1);
     }
 
-    // 🔹 Signal threads to exit
     state->exitFlag = true;
     for (int i = 0; i < state->numInstances; i++) {
         sem_post(&state->partyReady);
@@ -110,6 +85,93 @@ void queue_manager(GameState *state) {
     }
 
     sem_destroy(&state->partyReady);
+}
+
+int is_valid_number(const char *str) {
+    if (!str || *str == '\0') return 0;
+    for (int i = 0; str[i] != '\0'; i++) {
+        if (!isdigit((unsigned char)str[i])) return 0;
+    }
+    return 1;
+}
+
+int read_config(const char *filename, GameState *state) {
+    FILE *file = fopen(filename, "r");
+    if (!file) {
+        perror("Error opening config file");
+        return 0;
+    }
+
+    bool inputGood = true;
+    char line[50];
+
+    while (fgets(line, sizeof(line), file)) {
+        char key[50];
+        char valueStr[50];
+
+        if (sscanf(line, "%49[^:]: %49s", key, valueStr) != 2) {
+            fprintf(stderr, "Invalid format in config: %s\n", line);
+            inputGood = false;
+            continue;
+        }
+
+        if (!is_valid_number(valueStr)) {
+            fprintf(stderr, "Invalid value for %s: %s (must be a positive number)\n", key, valueStr);
+            inputGood = false;
+            continue;
+        }
+
+        unsigned long value = strtoul(valueStr, NULL, 10);
+
+        if (strcmp(key, "instances") == 0) {
+            if (value > UINT32_MAX) {
+                fprintf(stderr, "Error: instances value too large\n");
+                inputGood = false;
+            }
+            state->numInstances = (uint32_t)value;
+        } else if (strcmp(key, "tanks") == 0) {
+            if (value > UINT32_MAX) {
+                fprintf(stderr, "Error: tanks value too large\n");
+                inputGood = false;
+            }
+            state->numTanks = (uint32_t)value;
+        } else if (strcmp(key, "healers") == 0) {
+            if (value > UINT32_MAX) {
+                fprintf(stderr, "Error: healers value too large\n");
+                inputGood = false;
+            }
+            state->numHealers = (uint32_t)value;
+        } else if (strcmp(key, "dps") == 0) {
+            if (value > UINT32_MAX) {
+                fprintf(stderr, "Error: dps value too large\n");
+                inputGood = false;
+            }
+            state->numDPS = (uint32_t)value;
+        } else if (strcmp(key, "min time") == 0) {
+            if (value > UINT8_MAX) {
+                fprintf(stderr, "Error: min time value too large (max %u)\n", UINT8_MAX);
+                inputGood = false;
+            }
+            state->minTime = (uint8_t)value;
+        } else if (strcmp(key, "max time") == 0) {
+            if (value > UINT8_MAX) {
+                fprintf(stderr, "Error: max time value too large (max %u)\n", UINT8_MAX);
+                inputGood = false;
+            }
+            state->maxTime = (uint8_t)value;
+        } else {
+            fprintf(stderr, "Unknown config key: %s\n", key);
+            inputGood = false;
+        }
+    }
+
+    fclose(file);
+
+    if (!inputGood) {
+        exit(EXIT_FAILURE);
+    }
+
+    return 1;
 }
 
 int main() {
