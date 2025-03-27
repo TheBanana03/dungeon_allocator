@@ -105,6 +105,9 @@ int main() {
 
     printf("\n=== Summary ===\n");
     printf("Total parties served: %d\n", state.totalParties);
+    printf("DPS players remaining: %d\n", state.numDPS);
+    printf("Healers remaining: %d\n", state.numHealers);
+    printf("Tank remaining: %d\n", state.numTanks);
 
     return 0;
 }
