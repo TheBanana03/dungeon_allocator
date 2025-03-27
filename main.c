@@ -38,6 +38,31 @@ int read_config(const char *filename, GameState *state) {
     fclose(file);
     return 1;
 }
+int read_config(const char *filename, GameState *state) {
+    FILE *file = fopen(filename, "r");
+    if (!file) {
+        perror("Error opening config file");
+        return 0;
+    }
+
+    char line[50];
+    while (fgets(line, 50, file)) {
+        char key[50];
+        int value;
+
+        if (sscanf(line, "%[^:]: %d", key, &value) == 2) {
+            if (strcmp(key, "instances") == 0) state->numInstances = value;
+            else if (strcmp(key, "tanks") == 0) state->numTanks = value;
+            else if (strcmp(key, "healers") == 0) state->numHealers = value;
+            else if (strcmp(key, "dps") == 0) state->numDPS = value;
+            else if (strcmp(key, "min time") == 0) state->minTime = value;
+            else if (strcmp(key, "max time") == 0) state->maxTime = value;
+        }
+    }
+
+    fclose(file);
+    return 1;
+}
 
 void *run_instance(void *arg) {
     GameState *state = (GameState *)arg;
