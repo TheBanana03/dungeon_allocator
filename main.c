@@ -29,7 +29,7 @@ typedef struct {
 
 typedef struct {
     GameState *state;
-    int instanceID; // Unique instance ID
+    int instanceID;
 } ThreadData;
 
 void *run_instance(void *arg) {
@@ -130,7 +130,7 @@ size_t get_max_threads(size_t stack) {
     // Max processes
     getrlimit(RLIMIT_NPROC, &limit);
     limThreads = limit.rlim_cur;
-    return 10000;
+    // return 10000;
     return (ramThreads < limThreads) ? ramThreads : limThreads;
 }
 
