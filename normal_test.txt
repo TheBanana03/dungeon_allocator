@@ -1,0 +1,6 @@
+instances: 10
+tanks: 190
+healers: 180
+dps: 587600000
+min time: 1
+max time: 5

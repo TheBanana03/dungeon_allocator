@@ -1,0 +1,6 @@
+instances: 109292992910113
+tanks: 190asdasdad
+healers: -180
+dps: 587600000
+min time: 10
+max time: 5
