@@ -36,7 +36,7 @@ void *run_instance(void *arg) {
     ThreadData *data = (ThreadData *)arg;
     GameState *state = data->state;
     int instanceID = data->instanceID;
-    sem_post(&state->freeInstance);
+    // sem_post(&state->freeInstance);
 
     while (1) {
         sem_wait(&state->partyReady);
@@ -50,6 +50,12 @@ void *run_instance(void *arg) {
         printf("[Thread %lu | Instance %d] Instance active (clearing in %d seconds)\n", tid, instanceID, clearTime);
         for (int i = 0; i < state->numInstances; i++) {
             printf("[Instance %d: %s]\n", i, state->activeInstances[i] ? "Active" : "Empty");
+        }
+        if (state->numTanks >= 1 && state->numHealers >= 1 && state->numDPS >= 3) {
+            state->numTanks--;
+            state->numHealers--;
+            state->numDPS -= 3;
+            state->totalParties++;
         }
         printf("\n\n");
         pthread_mutex_unlock(&state->instanceLock);
@@ -87,10 +93,7 @@ void queue_manager(GameState *state) {
     while (state->numTanks >= 1 && state->numHealers >= 1 && state->numDPS >= 3) {
         sem_wait(&state->freeInstance);
 
-        state->numTanks--;
-        state->numHealers--;
-        state->numDPS -= 3;
-        state->totalParties++;
+        printf("%d, %d, %d\n", state->numTanks, state->numHealers, state->numDPS);
 
         sem_post(&state->partyReady);
     }
@@ -98,6 +101,22 @@ void queue_manager(GameState *state) {
     state->exitFlag = true;
     for (int i = 0; i < state->numInstances; i++) {
         sem_post(&state->partyReady);
+    }
+
+    bool allInstancesFinished = false;
+    while (!allInstancesFinished) {
+        allInstancesFinished = true;
+        pthread_mutex_lock(&state->instanceLock);
+        for (int i = 0; i < state->numInstances; i++) {
+            if (state->activeInstances[i]) {
+                allInstancesFinished = false;
+                break;
+            }
+        }
+        pthread_mutex_unlock(&state->instanceLock);
+        if (!allInstancesFinished) {
+            usleep(50000);
+        }
     }
 
     for (int i = 0; i < state->numInstances; i++) {
@@ -128,7 +147,7 @@ size_t get_max_threads(size_t stack) {
     // Max processes
     getrlimit(RLIMIT_NPROC, &limit);
     limThreads = limit.rlim_cur;
-    // return 10000;
+    return 10000;
     return (ramThreads < limThreads) ? ramThreads : limThreads;
 }
 
