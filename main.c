@@ -7,19 +7,24 @@
 #include <stdbool.h>
 #include <ctype.h>
 #include <stdint.h>
+#include <sys/resource.h>
+#include <sys/sysinfo.h>
 
 typedef struct {
-    u_int32_t numInstances;
-    u_int32_t numTanks;
-    u_int32_t numHealers;
-    u_int32_t numDPS;
-    u_int32_t totalParties;
+    uint32_t numInstances;
+    uint32_t numTanks;
+    uint32_t numHealers;
+    uint32_t numDPS;
+    uint32_t totalParties;
     sem_t partyReady;
     sem_t freeInstance;
     u_int8_t minTime;
     u_int8_t maxTime;
-    u_int32_t *partyCount;
+    uint32_t* partyCount;
+    uint32_t totalTime;
     bool exitFlag;
+    bool* activeInstances;
+    pthread_mutex_t instanceLock;
 } GameState;
 
 typedef struct {
@@ -31,11 +36,21 @@ void *run_instance(void *arg) {
     ThreadData *data = (ThreadData *)arg;
     GameState *state = data->state;
     int instanceID = data->instanceID;
+    sem_post(&state->freeInstance);
 
     while (1) {
         sem_wait(&state->partyReady);
 
         if (state->exitFlag) break;
+
+        pthread_mutex_lock(&state->instanceLock);
+        state->activeInstances[instanceID] = true;
+
+        for (int i = 0; i < state->numInstances; i++) {
+            printf("[Instance %d: %s]\n", i, state->activeInstances[i] ? "Active" : "Empty");
+        }
+        printf("\n\n");
+        pthread_mutex_unlock(&state->instanceLock);
 
         pthread_t tid = pthread_self();
         int clearTime = rand() % (state->maxTime - state->minTime + 1) + state->minTime;
@@ -44,7 +59,15 @@ void *run_instance(void *arg) {
         sleep(clearTime);
         printf("[Thread %lu | Instance %d] Instance finished\n", tid, instanceID);
 
+        pthread_mutex_lock(&state->instanceLock);
         state->partyCount[instanceID]++;
+        state->totalTime += clearTime;
+        state->activeInstances[instanceID] = false;
+        for (int i = 0; i < state->numInstances; i++) {
+            printf("[Instance %d: %s]\n", i, state->activeInstances[i] ? "Active" : "Empty");
+        }
+        printf("\n\n");
+        pthread_mutex_unlock(&state->instanceLock);
 
         sem_post(&state->freeInstance);
     }
@@ -72,7 +95,6 @@ void queue_manager(GameState *state) {
         state->totalParties++;
 
         sem_post(&state->partyReady);
-        sleep(1);
     }
 
     state->exitFlag = true;
@@ -87,20 +109,38 @@ void queue_manager(GameState *state) {
     sem_destroy(&state->partyReady);
 }
 
-int is_valid_number(const char *str) {
-    if (!str || *str == '\0') return 0;
+bool is_valid_number(const char *str) {
+    if (!str || *str == '\0') return false;
     for (int i = 0; str[i] != '\0'; i++) {
-        if (!isdigit((unsigned char)str[i])) return 0;
+        if (!isdigit((unsigned char)str[i])) return false;
     }
-    return 1;
+    return true;
 }
 
-int read_config(const char *filename, GameState *state) {
+size_t get_max_threads(size_t stack) {
+    struct sysinfo info;
+    struct rlimit limit;
+    size_t ramThreads;
+    size_t limThreads;
+
+    // RAM
+    sysinfo(&info);
+    ramThreads = info.freeram / stack;
+
+    // Max processes
+    getrlimit(RLIMIT_NPROC, &limit);
+    limThreads = limit.rlim_cur;
+    return 10000;
+    return (ramThreads < limThreads) ? ramThreads : limThreads;
+}
+
+int read_config(const char *filename, GameState *state, size_t stack) {
     FILE *file = fopen(filename, "r");
     if (!file) {
         perror("Error opening config file");
         return 0;
     }
+    size_t maxThreads = get_max_threads(stack);
 
     bool inputGood = true;
     char line[50];
@@ -124,38 +164,38 @@ int read_config(const char *filename, GameState *state) {
         unsigned long value = strtoul(valueStr, NULL, 10);
 
         if (strcmp(key, "instances") == 0) {
-            if (value > UINT32_MAX) {
-                fprintf(stderr, "Error: instances value too large\n");
+            if (value > maxThreads) {
+                fprintf(stderr, "Error: Too much instances (max %ld)\n", maxThreads);
                 inputGood = false;
             }
             state->numInstances = (uint32_t)value;
         } else if (strcmp(key, "tanks") == 0) {
             if (value > UINT32_MAX) {
-                fprintf(stderr, "Error: tanks value too large\n");
+                fprintf(stderr, "Error: Too much tanks (max %d)\n", UINT32_MAX);
                 inputGood = false;
             }
             state->numTanks = (uint32_t)value;
         } else if (strcmp(key, "healers") == 0) {
             if (value > UINT32_MAX) {
-                fprintf(stderr, "Error: healers value too large\n");
+                fprintf(stderr, "Error: Too much healers (max %d)\n", UINT32_MAX);
                 inputGood = false;
             }
             state->numHealers = (uint32_t)value;
         } else if (strcmp(key, "dps") == 0) {
             if (value > UINT32_MAX) {
-                fprintf(stderr, "Error: dps value too large\n");
+                fprintf(stderr, "Error: Too much DPS plauers (max %d)\n", UINT32_MAX);
                 inputGood = false;
             }
             state->numDPS = (uint32_t)value;
         } else if (strcmp(key, "min time") == 0) {
-            if (value > UINT8_MAX) {
-                fprintf(stderr, "Error: min time value too large (max %u)\n", UINT8_MAX);
+            if (value > 15) {
+                fprintf(stderr, "Error: Minimum time is too large (max 15)\n");
                 inputGood = false;
             }
             state->minTime = (uint8_t)value;
         } else if (strcmp(key, "max time") == 0) {
-            if (value > UINT8_MAX) {
-                fprintf(stderr, "Error: max time value too large (max %u)\n", UINT8_MAX);
+            if (value > 15) {
+                fprintf(stderr, "Error: Maxmimum time is too large (max 15)\n");
                 inputGood = false;
             }
             state->maxTime = (uint8_t)value;
@@ -176,8 +216,14 @@ int read_config(const char *filename, GameState *state) {
 
 int main() {
     GameState state = {0};
+    size_t stack_size;
+    pthread_attr_t attr;
+    
+    pthread_attr_init(&attr);
+    pthread_attr_getstacksize(&attr, &stack_size);
+    pthread_attr_destroy(&attr);
 
-    if (!read_config("config.txt", &state)) {
+    if (!read_config("config.txt", &state, stack_size)) {
         return 1;
     }
 
@@ -185,7 +231,8 @@ int main() {
     sem_init(&state.partyReady, 0, 0);
     sem_init(&state.freeInstance, 0, state.numInstances);
 
-    state.partyCount = (u_int32_t *)calloc(state.numInstances, sizeof(u_int32_t));
+    state.partyCount = (uint32_t*)calloc(state.numInstances, sizeof(uint32_t));
+    state.activeInstances = (bool*)calloc(state.numInstances, sizeof(uint32_t));
 
     srand(time(NULL));
 
@@ -201,6 +248,7 @@ int main() {
 
     printf("\n=== Summary ===\n");
     printf("Total parties served: %d\n", state.totalParties);
+    printf("Total time served: %d\n", state.totalTime);
     printf("DPS players remaining: %d\n", state.numDPS);
     printf("Healers remaining: %d\n", state.numHealers);
     printf("Tanks remaining: %d\n", state.numTanks);
