@@ -3,4 +3,4 @@ tanks: 19000
 healers: 18000
 dps: 587600000
 min time: 1
-max time: 2
+max time: 0

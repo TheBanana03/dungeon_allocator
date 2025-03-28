@@ -110,7 +110,7 @@ void queue_manager(GameState *state) {
 }
 
 bool is_valid_number(const char *str) {
-    if (!str || *str == '\0') return false;
+    if ((!str || *str == '\0') || (str[0] == '0' && str[1] == '\0')) return false;
     for (int i = 0; str[i] != '\0'; i++) {
         if (!isdigit((unsigned char)str[i])) return false;
     }
