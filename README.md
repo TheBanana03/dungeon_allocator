@@ -30,3 +30,5 @@ max time: <number>
 * min time and max time must be 4-bit positive integers (values between 0 and 15).
 * The maximum number of instances is automatically restricted by dividing the available free RAM by the stack size of a thread.
 **The program will exit with an error if the input does not follow the abov restrictions.**
+
+Github: https://github.com/TheBanana03/dungeon_allocator.git
