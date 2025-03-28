@@ -45,17 +45,15 @@ void *run_instance(void *arg) {
 
         pthread_mutex_lock(&state->instanceLock);
         state->activeInstances[instanceID] = true;
-
+        pthread_t tid = pthread_self();
+        int clearTime = rand() % (state->maxTime - state->minTime + 1) + state->minTime;
+        printf("[Thread %lu | Instance %d] Instance active (clearing in %d seconds)\n", tid, instanceID, clearTime);
         for (int i = 0; i < state->numInstances; i++) {
             printf("[Instance %d: %s]\n", i, state->activeInstances[i] ? "Active" : "Empty");
         }
         printf("\n\n");
         pthread_mutex_unlock(&state->instanceLock);
 
-        pthread_t tid = pthread_self();
-        int clearTime = rand() % (state->maxTime - state->minTime + 1) + state->minTime;
-
-        printf("[Thread %lu | Instance %d] Instance active (clearing in %d seconds)\n", tid, instanceID, clearTime);
         sleep(clearTime);
         printf("[Thread %lu | Instance %d] Instance finished\n", tid, instanceID);
 
