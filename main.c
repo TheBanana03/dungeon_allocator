@@ -191,14 +191,21 @@ int read_config(const char *filename, GameState *state, size_t stack) {
             if (value > 15) {
                 fprintf(stderr, "Error: Minimum time is too large (max 15)\n");
                 inputGood = false;
+            } else {
+                state->minTime = (uint8_t)value;
             }
-            state->minTime = (uint8_t)value;
         } else if (strcmp(key, "max time") == 0) {
             if (value > 15) {
-                fprintf(stderr, "Error: Maxmimum time is too large (max 15)\n");
+                fprintf(stderr, "Error: Maximum time is too large (max 15)\n");
                 inputGood = false;
             }
-            state->maxTime = (uint8_t)value;
+            if (value < state->minTime) { 
+                fprintf(stderr, "Error: Maximum time (%lu) must be greater than or equal to minimum time (%d)\n", value, state->minTime);
+                inputGood = false;
+            }
+            if (inputGood) {
+                state->maxTime = (uint8_t)value;
+            }
         } else {
             fprintf(stderr, "Unknown config key: %s\n", key);
             inputGood = false;
